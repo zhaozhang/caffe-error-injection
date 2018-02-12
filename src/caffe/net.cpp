@@ -680,17 +680,87 @@ void Net::AppendParam(const NetParameter& param, const int layer_id, const int p
   }
 }
 
+extern "C" int step_cur;
+extern "C" __thread int deviceid;
+extern "C" __thread int Active;
+extern "C" int mut_step, mut_layer_fp, mut_layer_bp, mut_layer_fp_idx, mut_layer_bp_idx, mut_bit;
+extern "C" int bit_mask[32];
+extern "C" int Clamp_On;
+extern "C" float Data_Range;
+
+#ifndef CPU_ONLY
+template <typename Dtype>
+void Clamp_data_gpu(int N, Dtype* data, Dtype low, Dtype high);
+#endif
+
+void Flip_Bit(void *addr)
+{
+  int *p;
+  float *fp;
+
+  p = (int *)addr;
+  fp = (float *)addr;
+
+  if(mut_layer_fp >= 0) LOG(INFO) << "DBG: step_cur = " << step_cur << "  MUT_STEP =" << mut_step << "  mut_layer_fp = " << mut_layer_fp;
+  if(mut_layer_bp >= 0) LOG(INFO) << "DBG: step_cur = " << step_cur << "  MUT_STEP =" << mut_step << "  mut_layer_bp = " << mut_layer_bp;
+
+  LOG(INFO) << "DBG: Before mutation " << *fp;
+  *p = *p ^ bit_mask[mut_bit];
+  LOG(INFO) << "DBG: After  mutation " << *fp;
+}
+
 float Net::ForwardFromTo(int start, int end) {
   CHECK_GE(start, 0);
   CHECK_LT(end, layers_.size());
   float loss = 0;
+  const float *bot_data, *top_data;
+  float *mut_bot_data, *mut_bot_gpu_data;
+
+  Active = 0;
   for (int i = start; i <= end; ++i) {
+    if( (step_cur == mut_step) && (deviceid<=0) && (mut_layer_fp==i) && (i>=1) ) { // layer 0 (data) does not have bottom
+      Active = 1;
+    }
+    else {
+      Active = 0;
+    }
+
     // LOG(INFO) << " ****** [Forward] (" << i << ") Layer '" << layer_names_[i];
     // << "' FT " << Type_Name(layers_[i]->forward_type())
     // << " BT " << Type_Name(layers_[i]->backward_type());
+
+    if(Active) {
+      mut_bot_data = bottom_vecs_[i][0]->mutable_cpu_data<float>();
+      if( (mut_layer_fp_idx >=0) && (mut_layer_fp_idx < bottom_vecs_[i][0]->count()) ) Flip_Bit((void*)(&(mut_bot_data[mut_layer_fp_idx])));
+//      bot_data = bottom_vecs_[i][0]->cpu_data<float>();
+//      LOG(INFO) << "DBG: Before FP, layer " << i << "   bot_data[0] = " << bot_data[0];
+    }
+
+    if(Clamp_On && (step_cur>0) ) { // crash when step_cur==0. Unknown yet. Maybe we need to check data ready or not first.
+      if( (deviceid<=0) && (i>0) )  {
+        int count=bottom_vecs_[i][0]->count();
+        float low_Bound=-Data_Range;
+
+        mut_bot_gpu_data = bottom_vecs_[i][0]->mutable_gpu_data<float>();
+        Clamp_data_gpu(count, mut_bot_gpu_data, low_Bound, Data_Range);
+
+//        mut_bot_data = bottom_vecs_[i][0]->mutable_cpu_data<float>();
+//        for(int j=0; j<count; j++) {
+//          if(mut_bot_data[j] > Data_Range) mut_bot_data[j] = Data_Range;
+//          if(mut_bot_data[j] < low_Bound) mut_bot_data[j] =  low_Bound;
+//        }
+      }
+    }
+
+
     float layer_loss = layers_[i]->Forward(bottom_vecs_[i], top_vecs_[i]);
     loss += layer_loss;
     if (debug_info_) { ForwardDebugInfo(i); }
+
+//    if( (step_cur == mut_step) && (deviceid<=0) ) {
+//      top_data = top_vecs_[i][0]->cpu_data<float>();
+//      LOG(INFO) << "DBG: After FP, layer " << i << "  top_data[0] = " << top_data[0];
+//    }
   }
   ++infer_count_;
   return loss;
@@ -704,7 +774,18 @@ float Net::ForwardTo(int end) {
   return ForwardFromTo(0, end);
 }
 
+//template <typename Dtype>
+//void Print_ptr_gpu(int layer_idx, string name, const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top)
+//{
+//  const Dtype* bottom_data = bottom[0]->gpu_data();
+//  Dtype* top_data = top[0]->mutable_gpu_data();
+
+//  LOG(INFO) << "DBG: step " << step_cur << "   Layer " << layer_idx << "   name = " << names << " (" << bottom_data << ", " << top_data << ")";  
+//}
+
 const vector<Blob*>& Net::Forward(float* loss) {
+//  InjectError();
+
   if (loss != NULL) {
     *loss = ForwardFromTo(0, layers_.size() - 1);
   } else {
@@ -723,10 +804,65 @@ const vector<Blob*>& Net::Forward(const vector<Blob*>& bottom, float* loss) {
   return Forward(loss);
 }
 
+void Net::Print_Layer_Info(void)
+{
+  int i, nLayers;
+
+  nLayers=layers_.size()-1;
+
+  if( (step_cur == 1) && (deviceid <= 0) ) {  
+    for(i = 0; i<= nLayers; i++) {
+      LOG(INFO) << "DBG: Layer info, id: " << i << " name = " << layer_names()[i] << " output type = " << layers_[i]->type() 
+        << "  size = " << top_vecs_[i][0]->count() << " (" << top_vecs_[i][0]->num() << ", " << top_vecs_[i][0]->channels() << ", " 
+        << top_vecs_[i][0]->height() << ", " << top_vecs_[i][0]->width() << ")" ;
+    }
+
+    for(i = 0; i<= nLayers; i++) {
+      if (layer_need_backward_[i]) {
+        LOG(INFO) << "DBG: layer " << i << " supports Backward propagation. Type: " << layers_[i]->type() << ".";
+      }
+    }
+
+    // env boundary check 
+    
+    if(mut_layer_fp > nLayers) {
+      LOG(INFO) << "Warning:  MUT_LAYER_FP is TOO large. MUT_LAYER_FP = " << mut_layer_fp << ". It will be set " << nLayers << ".";
+      mut_layer_fp = nLayers;
+    }
+    if(mut_layer_bp > nLayers) {
+      LOG(INFO) << "Warning:  MUT_LAYER_BP is TOO large. MUT_LAYER_BP = " << mut_layer_bp << ". It will be set " << nLayers << ".";
+      mut_layer_bp = nLayers;
+    }
+
+    if(mut_layer_bp == 0 ) {
+      LOG(INFO) << "Warning:  MUT_LAYER_BP is equal 0 which does not do Backward. It will be set 1.";
+      mut_layer_bp = 1;
+    }
+/*
+    if(mut_layer_fp_idx >= bottom_vecs_[mut_layer_fp][0]->count() ) {
+      LOG(INFO) << "Warning:  MUT_LAYER_FP_IDX is too large. MUT_LAYER_FP_IDX = " << mut_layer_fp_idx << "  size = " << bottom_vecs_[mut_layer_fp][0]->count();
+      mut_layer_fp_idx = bottom_vecs_[mut_layer_fp][0]->count() - 1;
+    }
+
+    if(mut_layer_bp_idx >= top_vecs_[mut_layer_bp][0]->count() ) {
+      LOG(INFO) << "Warning:  MUT_LAYER_BP_IDX is too large. MUT_LAYER_BP_IDX = " << mut_layer_bp_idx << "  size = " << top_vecs_[mut_layer_bp][0]->count();
+      mut_layer_bp_idx = top_vecs_[mut_layer_bp][0]->count() - 1;
+    }
+*/
+
+
+  }
+
+}
+
 float Net::ForwardBackward(bool apply_update) {
   float loss;
+
+  Print_Layer_Info();
+
   Forward(&loss);
   Backward(apply_update);
+
   return loss;
 }
 
@@ -735,14 +871,41 @@ void Net::BackwardFromTo(int start, int end) {
 }
 
 void Net::BackwardFromToAu(int start, int end, bool apply_update) {
+  const float *bot_data, *top_data;
+  float *mut_bot_data;
+
   CHECK_GE(end, 0);
   CHECK_LT(start, layers_.size());
+
+  Active = 0;
   for (int i = start; i >= end; --i) {
+    if( (step_cur == mut_step) && (deviceid<=0) && (mut_layer_bp==i) && (i>=1) ) {
+      Active = 1;
+    }
+    else {
+      Active = 0;
+    }
+
     if (!layer_need_backward_[i]) {
       continue;
     }
 
+    if(Active) {
+//    if( (step_cur == mut_step) && (i>0) && (deviceid<=0) ) {
+      mut_bot_data = bottom_vecs_[i][0]->mutable_cpu_data<float>();
+      if( (mut_layer_bp_idx >=0) && (mut_layer_bp_idx < bottom_vecs_[i][0]->count()) ) Flip_Bit((void*)(&(mut_bot_data[0])));
+//      top_data = top_vecs_[i][0]->cpu_data<float>();
+//      LOG(INFO) << "DBG: Before BP, layer " << i << "   top_data[0] = " << top_data[0];
+    }
+
+
     layers_[i]->Backward(top_vecs_[i], bottom_need_backward_[i], bottom_vecs_[i]);
+
+//    if( (step_cur == mut_step) && (i>0) && (deviceid<=0) ) {
+//      bot_data = bottom_vecs_[i][0]->cpu_data<float>();
+//      LOG(INFO) << "DBG: After BP, layer " << i << "  bottom_data[0] = " << bot_data[0];
+//    }
+
 
     if (debug_info_) {
       BackwardDebugInfo(i);

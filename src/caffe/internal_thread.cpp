@@ -59,6 +59,8 @@ void InternalThread::RestartAllThreads(size_t new_threads, bool delayed, bool se
   }
 }
 
+extern "C" __thread int deviceid;
+
 void InternalThread::entry(int thread_id, int device, Caffe::Brew mode, uint64_t random_seed,
     int solver_count, size_t rank, bool set_cpu_affinity) {
   delay_flags_[thread_id]->wait();
@@ -67,6 +69,7 @@ void InternalThread::entry(int thread_id, int device, Caffe::Brew mode, uint64_t
   }
   rank_ = rank;
   target_device_ = device;
+  deviceid = device;
 
 #ifndef CPU_ONLY
   if (mode == Caffe::GPU) {
@@ -76,6 +79,10 @@ void InternalThread::entry(int thread_id, int device, Caffe::Brew mode, uint64_t
   Caffe::set_mode(mode);
   Caffe::set_random_seed(random_seed);
   Caffe::set_solver_count(solver_count);
+
+  LOG(INFO) << "Started internal thread " << std::this_thread::get_id()
+            << " on device " << device << ", rank " << rank_;
+
 
   DLOG(INFO) << "Started internal thread " << std::this_thread::get_id()
             << " on device " << device << ", rank " << rank_;

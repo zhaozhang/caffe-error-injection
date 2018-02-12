@@ -184,6 +184,7 @@ void Solver::InitTestNets() {
   }
 }
 
+extern "C" int step_cur;
 void Solver::Step(int iters) {
   const int start_iter = iter_;
   const int stop_iter = iter_ + iters;
@@ -194,6 +195,7 @@ void Solver::Step(int iters) {
   const int solver_count = Caffe::solver_count();
   const bool root_solver = this->is_root();
 
+  step_cur = iter_;
   net_->set_solver(this);
 
   if (iters <= 0) {
@@ -248,6 +250,7 @@ void Solver::Step(int iters) {
 #endif
 
   while (iter_ < stop_iter) {
+    step_cur = iter_;
     if (param_.snapshot_diff()) {
       net_->ClearParamDiffs();
     }  // we clean them in ApplyUpdate otherwise
@@ -297,6 +300,7 @@ void Solver::Step(int iters) {
 #else
     iteration_start_signal(0);
 #endif
+//    LOG(INFO) << "DBG: step " << step_cur << " param_.iter_size() = " << param_.iter_size();
     for (int i = 0; i < param_.iter_size(); ++i) {
       loss += net_->ForwardBackward(i + 1 == param_.iter_size());
       if (i == 0) {
@@ -367,6 +371,7 @@ void Solver::Step(int iters) {
     // Increment the internal iter_ counter -- its value should always indicate
     // the number of times the weights have been updated.
     ++iter_;
+    step_cur = iter_;
 
     SolverAction::Enum request = GetRequestedAction();
     // Save a snapshot if needed.
