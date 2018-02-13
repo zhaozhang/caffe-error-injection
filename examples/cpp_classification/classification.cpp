@@ -8,6 +8,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include "caffe/error.hpp"
 
 using namespace caffe;  // NOLINT(build/namespaces)
 using std::string;

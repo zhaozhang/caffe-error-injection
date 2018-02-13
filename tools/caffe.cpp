@@ -9,6 +9,7 @@ namespace bp = boost::python;
 #include <boost/algorithm/string.hpp>
 
 #include "caffe/caffe.hpp"
+#include "caffe/error.hpp"
 #include "caffe/util/signal_handler.h"
 
 
@@ -445,7 +446,7 @@ int time() {
 }
 RegisterBrewFunction(time);
 
-int step_cur=-1;
+/*int step_cur=-1;
 __thread int deviceid=-1;
 __thread int Active=0;
 int mut_step=-1;
@@ -456,7 +457,7 @@ int mut_layer_bp_idx=-1;
 int mut_bit=-1;
 int bit_mask[32];
 int Clamp_On=0;
-float Data_Range=1.0E10;
+float Data_Range=1.0E10;*/
 
 void Init_Bit_Mask(void)
 {
