@@ -683,7 +683,7 @@ void Net::AppendParam(const NetParameter& param, const int layer_id, const int p
 extern "C" int step_cur;
 extern "C" __thread int deviceid;
 extern "C" __thread int Active;
-extern "C" int mut_step, mut_layer_fp, mut_layer_bp, mut_layer_fp_idx, mut_layer_bp_idx, mut_bit;
+extern "C" int mut_step, mut_layer_fp, mut_layer_bp, mut_param_set, mut_layer_fp_idx, mut_layer_bp_idx, mut_param_set_idx, mut_bit;
 extern "C" int bit_mask[32];
 extern "C" int Clamp_On;
 extern "C" float Data_Range;
@@ -703,6 +703,7 @@ void Flip_Bit(void *addr)
 
   if(mut_layer_fp >= 0) LOG(INFO) << "DBG: step_cur = " << step_cur << "  MUT_STEP =" << mut_step << "  mut_layer_fp = " << mut_layer_fp;
   if(mut_layer_bp >= 0) LOG(INFO) << "DBG: step_cur = " << step_cur << "  MUT_STEP =" << mut_step << "  mut_layer_bp = " << mut_layer_bp;
+  if(mut_param_set >= 0) LOG(INFO) << "DBG: step_cur = " << step_cur << "  MUT_STEP =" << mut_step << "  mut_param_set = " << mut_param_set;
 
   LOG(INFO) << "DBG: Before mutation " << *fp;
   *p = *p ^ bit_mask[mut_bit];
@@ -806,9 +807,10 @@ const vector<Blob*>& Net::Forward(const vector<Blob*>& bottom, float* loss) {
 
 void Net::Print_Layer_Info(void)
 {
-  int i, nLayers;
+  int i, nLayers, nParamSets;
 
   nLayers=layers_.size()-1;
+  nParamSets = learnable_params().size();
 
   if( (step_cur == 1) && (deviceid <= 0) ) {  
     for(i = 0; i<= nLayers; i++) {
@@ -821,6 +823,13 @@ void Net::Print_Layer_Info(void)
       if (layer_need_backward_[i]) {
         LOG(INFO) << "DBG: layer " << i << " supports Backward propagation. Type: " << layers_[i]->type() << ".";
       }
+    }
+
+    LOG(INFO) << "DBG: Output parameters info.";
+    for (int param_id = 0; param_id < nParamSets; ++param_id) {
+        LOG(INFO) << "DBG: " << param_id << "  size = " << learnable_params()[param_id]->count()
+            << " (" << learnable_params()[param_id]->num() << ", " << learnable_params()[param_id]->channels() << ", "
+            << learnable_params()[param_id]->height() << ", " << learnable_params()[param_id]->width() << ")";
     }
 
     // env boundary check 
@@ -838,6 +847,12 @@ void Net::Print_Layer_Info(void)
       LOG(INFO) << "Warning:  MUT_LAYER_BP is equal 0 which does not do Backward. It will be set 1.";
       mut_layer_bp = 1;
     }
+
+    if(mut_param_set >= nParamSets) {
+      LOG(INFO) << "Warning:  MUT_PARAM_SET is TOO large. MUT_PARAM_SET = " << mut_param_set << ". It will be set " << nParamSets-1 << ".";
+      mut_param_set = nParamSets-1;
+    }
+
 /*
     if(mut_layer_fp_idx >= bottom_vecs_[mut_layer_fp][0]->count() ) {
       LOG(INFO) << "Warning:  MUT_LAYER_FP_IDX is too large. MUT_LAYER_FP_IDX = " << mut_layer_fp_idx << "  size = " << bottom_vecs_[mut_layer_fp][0]->count();

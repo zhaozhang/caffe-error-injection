@@ -130,6 +130,9 @@ void SGDSolver<Dtype>::PreSolve() {
   }
 }
 
+extern "C" int step_cur, mut_step, mut_param_set, mut_param_set_idx;
+extern void Flip_Bit(void *addr);
+
 template<typename Dtype>
 void SGDSolver<Dtype>::ClipGradients(void* handle) {
   const float clip_gradients = this->param_.clip_gradients();
@@ -224,6 +227,7 @@ void sgd_reg_update_all_and_clear_gpu(int N,
     void* handle, bool clear_grads);
 #endif
 
+#define MAX_DEPTH	(64)
 
 template<typename Dtype>
 float SGDSolver<Dtype>::ComputeUpdateValue(int param_id, void* handle, float rate,
@@ -239,6 +243,16 @@ float SGDSolver<Dtype>::ComputeUpdateValue(int param_id, void* handle, float rat
   const bool larc =this->param_.larc();
   const string& larc_policy = this->param_.larc_policy();
   float local_rate = GetLocalRate(param_id, wgrad_sq);
+
+//  if( (step_cur == 2) && (param_id==0) && (rank_ == 0) ) {
+//    LOG(INFO) << "DBG: larc_policy = " << larc_policy << "  local_rate = " << local_rate << " param_count = " << param->count() << ".";
+//  }
+  float *mut_param;
+  if( (step_cur == mut_step) && (rank_ == 0) && (param_id==mut_param_set) ) {
+    mut_param = (float *)history->mutable_cpu_data();
+    if( (mut_param_set_idx >=0) && (mut_param_set_idx < history->count()) ) Flip_Bit((void*)(&(mut_param[mut_param_set_idx])));
+  }
+
   if (larc) {
   if (larc_policy == "scale") {
     local_rate = rate * local_rate;
@@ -267,6 +281,7 @@ float SGDSolver<Dtype>::ComputeUpdateValue(int param_id, void* handle, float rat
     float decay = local_decay(param_id);
     const Type wtype = param->data_type();
     const Type gtype = param->diff_type();
+
     if (gtype == tp<float16>()) {
       sgd_reg_update_all_and_clear_gpu<float16, Dtype, Dtype>(param->count(),
           param->mutable_gpu_diff<float16>(),

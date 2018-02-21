@@ -506,14 +506,15 @@ void Get_Mutation_Params(void)
   Get_Env_Param("MUT_STEP", mut_step, -1);
   Get_Env_Param("MUT_LAYER_FP", mut_layer_fp, -1);
   Get_Env_Param("MUT_LAYER_BP", mut_layer_bp, -1);
+  Get_Env_Param("MUT_PARAM_SET", mut_param_set, -1);
   Get_Env_Param("MUT_LAYER_FP_IDX", mut_layer_fp_idx, 0);
   Get_Env_Param("MUT_LAYER_BP_IDX", mut_layer_bp_idx, 0);
+  Get_Env_Param("MUT_PARAM_SET_IDX", mut_param_set_idx, 0);
   Get_Env_Param("MUT_BIT", mut_bit, 0);
   Get_Env_Param("CLAMP_ON", Clamp_On, 0);
   Get_Env_Param("DATA_RANGE", Data_Range, 1.0E7);
 
-
-  LOG(INFO) << "DBG: Param  MUT_STEP = " << mut_step << "  MUT_LAYER_FP = " << mut_layer_fp << "  MUT_LAYER_BP = " << mut_layer_bp << "  MUT_LAYER_FP_IDX = " << mut_layer_fp_idx << "  MUT_LAYER_BP_IDX = " << mut_layer_bp_idx << "  MUT_BIT = " << mut_bit;
+  LOG(INFO) << "DBG: Param  MUT_STEP = " << mut_step << "  MUT_LAYER_FP = " << mut_layer_fp << "  MUT_LAYER_BP = " << mut_layer_bp << "  MUT_PARAM_SET = " << mut_param_set << "  MUT_LAYER_FP_IDX = " << mut_layer_fp_idx << "  MUT_LAYER_BP_IDX = " << mut_layer_bp_idx << "  MUT_PARAM_SET_IDX = " << mut_param_set_idx << "  MUT_BIT = " << mut_bit;
 
   if(mut_bit > 31) LOG(INFO) << "Warning: MUT_BIT > 31. MUT_BIT = " << mut_bit;
 
