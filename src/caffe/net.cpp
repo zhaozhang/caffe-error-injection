@@ -893,7 +893,7 @@ void Net::BackwardFromToAu(int start, int end, bool apply_update) {
     if(Active) {
 //    if( (step_cur == mut_step) && (i>0) && (deviceid<=0) ) {
       mut_bot_data = bottom_vecs_[i][0]->mutable_cpu_data<float>();
-      if( (mut_layer_bp_idx >=0) && (mut_layer_bp_idx < bottom_vecs_[i][0]->count()) ) Flip_Bit((void*)(&(mut_bot_data[0])));
+      if( (mut_layer_bp_idx >=0) && (mut_layer_bp_idx < bottom_vecs_[i][0]->count()) ) Flip_Bit((void*)(&(mut_bot_data[mut_layer_bp_idx])));
 //      top_data = top_vecs_[i][0]->cpu_data<float>();
 //      LOG(INFO) << "DBG: Before BP, layer " << i << "   top_data[0] = " << top_data[0];
     }
