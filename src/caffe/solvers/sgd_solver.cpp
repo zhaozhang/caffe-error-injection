@@ -130,7 +130,7 @@ void SGDSolver<Dtype>::PreSolve() {
   }
 }
 
-extern "C" int step_cur, mut_step, mut_param_set, mut_param_set_idx;
+extern "C" int Is_In_Test, step_cur, mut_step, mut_param_set, mut_param_set_idx;
 extern void Flip_Bit(void *addr);
 
 template<typename Dtype>
@@ -250,7 +250,7 @@ float SGDSolver<Dtype>::ComputeUpdateValue(int param_id, void* handle, float rat
   float *mut_param;
   if( (step_cur == mut_step) && (rank_ == 0) && (param_id==mut_param_set) ) {
     mut_param = (float *)history->mutable_cpu_data();
-    if( (mut_param_set_idx >=0) && (mut_param_set_idx < history->count()) ) Flip_Bit((void*)(&(mut_param[mut_param_set_idx])));
+    if( (mut_param_set_idx >=0) && (mut_param_set_idx < history->count()) && (Is_In_Test==0) ) Flip_Bit((void*)(&(mut_param[mut_param_set_idx])));
   }
 
   if (larc) {

@@ -686,7 +686,7 @@ extern "C" __thread int Active;
 extern "C" int mut_step, mut_layer_fp, mut_layer_bp, mut_param_set, mut_layer_fp_idx, mut_layer_bp_idx, mut_param_set_idx, mut_bit;
 extern "C" int bit_mask[32];
 extern "C" int Clamp_On;
-extern "C" float Data_Range;
+extern "C" float Data_Range, Is_In_Test;
 
 #ifndef CPU_ONLY
 template <typename Dtype>
@@ -732,7 +732,7 @@ float Net::ForwardFromTo(int start, int end) {
 
     if(Active) {
       mut_bot_data = bottom_vecs_[i][0]->mutable_cpu_data<float>();
-      if( (mut_layer_fp_idx >=0) && (mut_layer_fp_idx < bottom_vecs_[i][0]->count()) ) Flip_Bit((void*)(&(mut_bot_data[mut_layer_fp_idx])));
+      if( (mut_layer_fp_idx >=0) && (mut_layer_fp_idx < bottom_vecs_[i][0]->count()) && (Is_In_Test==0) ) Flip_Bit((void*)(&(mut_bot_data[mut_layer_fp_idx])));
 //      bot_data = bottom_vecs_[i][0]->cpu_data<float>();
 //      LOG(INFO) << "DBG: Before FP, layer " << i << "   bot_data[0] = " << bot_data[0];
     }
@@ -908,7 +908,7 @@ void Net::BackwardFromToAu(int start, int end, bool apply_update) {
     if(Active) {
 //    if( (step_cur == mut_step) && (i>0) && (deviceid<=0) ) {
       mut_bot_data = bottom_vecs_[i][0]->mutable_cpu_data<float>();
-      if( (mut_layer_bp_idx >=0) && (mut_layer_bp_idx < bottom_vecs_[i][0]->count()) ) Flip_Bit((void*)(&(mut_bot_data[mut_layer_bp_idx])));
+      if( (mut_layer_bp_idx >=0) && (mut_layer_bp_idx < bottom_vecs_[i][0]->count()) && (Is_In_Test==0) ) Flip_Bit((void*)(&(mut_bot_data[mut_layer_bp_idx])));
 //      top_data = top_vecs_[i][0]->cpu_data<float>();
 //      LOG(INFO) << "DBG: Before BP, layer " << i << "   top_data[0] = " << top_data[0];
     }

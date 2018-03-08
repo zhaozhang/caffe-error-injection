@@ -184,7 +184,7 @@ void Solver::InitTestNets() {
   }
 }
 
-extern "C" int step_cur;
+extern "C" int step_cur, Is_In_Test;
 void Solver::Step(int iters) {
   const int start_iter = iter_;
   const int stop_iter = iter_ + iters;
@@ -481,13 +481,16 @@ bool Solver::Solve(const char* resume_file) {
 }
 
 bool Solver::TestAll(const int iters, bool use_multi_gpu) {
+  Is_In_Test = 1;
   for (int test_net_id = 0;
        test_net_id < test_nets_.size() && !requested_early_exit_;
        ++test_net_id) {
     if (Test(test_net_id, iters, use_multi_gpu)) {
+      Is_In_Test = 0;
       return true;
     }
   }
+  Is_In_Test = 0;
   return false;
 }
 
